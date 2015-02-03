@@ -279,16 +279,27 @@ C_i = \sum_{j=1}^{n}w(R_i)\Phi(i, j)||c_i-c_j||_2
 2）location heuristic
 
 心理物理学方面的研究表示人类视觉注意偏好图像的中央区域，所以在通常情况下越靠近图像中央的像素越显著。
-
 \begin{align}
 H_i = \frac{1}{w(R_i)}\sum_{x_i \in R_i} exp\{-\lambda||x_i-x_c||^2\}
 \end{align}
+
+然后将$C_i$与$H_i$组合起来，得到
+\begin{align}
+\bar{s}_i = C_i \cdot H_i
+\end{align}
+
+由于local contrast和location cues都被归一化到$[0, 1)$，它们各自的重要性由$\lambda$来控制。当对三个layers均计算完$\bar{s}_i$后，就可以得到每一层的初始显著图，最后通过一种hierarchical inference procedure来对多尺度显著性检测结果进行融合。
 
 4. 最后一步Hierarchical Inference是怎么进行的？
 
 Cue maps显示了不同尺度下的显著性，效果很不一样。在底层，会产生很多小区域，而在高层会包含大尺度的结构。由于图像的多样性，单独的一层并不能保证效果是完美的，也很难判别哪一层是效果最好的。
 
 由于背景或前景的复杂性，单纯通过求这三层产生的显著图的平均值来融合并不是一个好的选择。作者构造了一个基于树结构的图，见图~\ref{fig: hsaliency1}中的(e)，其中的节点代表相应层中的区域。节点$j$在下一层中包含两个分割区域，因而有两个子节点。其中父节点代表整幅图像的最粗糙表示。
+
+将图中对应于第$L_l$层中第$i$个区域的节点上的显著性定义为变量$s_i^l$，设$S$是包含图中所有节点的集合。最小化如下的能量方程：
+\begin{align}
+E(S) = \sum_l \sum_i E_D(s_i^l)+\sum_l \sum_{i, R_i^l \subseteq R_j ^{l+1}} E_S(s_i^l, s_j^{l+1})
+\end{align}
 
 %
 % references
