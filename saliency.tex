@@ -301,6 +301,65 @@ Cue maps显示了不同尺度下的显著性，效果很不一样。在底层，
 E(S) = \sum_l \sum_i E_D(s_i^l)+\sum_l \sum_{i, R_i^l \subseteq R_j ^{l+1}} E_S(s_i^l, s_j^{l+1})
 \end{align}
 
+\section{2014CVPR-LuSong-Learning optimal seeds for diffusion-based salient objectt detection}
+
+\section{2013CVPR-MaiLong-Saliency Aggregation: A Data-driven Approach}
+
+方法动机：目前在视觉显著性分析方面有很多的方法，每种方法可能对某一些图像或图像中的某些部分适用，能产生较好的结果，却没有哪一种方法能对所有的图像都适用。并且不同的显著性计算方法之间通常是互补的。因而可以尝试对这些显著性计算方法进行组合以获得比使用单一的一种方法好的效果。由于每种方法在不同图像上的表现也不同，所以对每幅图像使用的方法组合也是不同的。
+
+1. saliency aggregation的含义是什么？
+
+saliency aggregation应该是显著性融合的意思，一般的融合方法都是预先定义好一个组合方程，并且其中每种方法的重要程度都是一样的。
+
+\section{Saliency Detection via Graph-Based Manifold Ranking}
+
+方法动机：以往的显著性检测方法大多是通过计算某像素或区域在局部的上下文中或整幅图像中的对比度来得到该像素或区域上的显著性值，这篇论文则是通过计算图像元素(像素或区域)和foreground cues以及background cues的相似度来得到该图像元素上的显著度，相似度是通过graph-based manifold ranking求得的。
+
+background cue：背景通常与图像的四个边界呈现局部或整体上的外观关联性
+
+foreground cue：foreground presents appearance coherence and consistency
+
+算法步骤如图~\ref{fig: MR1}，先对图像进行超像素分割，然后将分割后的图像映射为图，每个超像素为图中的节点。第一个阶段是将图像的每一条边界上(共4条)的节点看作是labelled background queries，依次算图中的每个节点与这些queries的相关性来得到4幅labelled maps，然后对其进行融合得到显著图。在第二阶段，对第一阶段得到的显著图二值化，然后将得到的labelled foreground节点看作是salient queries，最终每个节点的显著度就是通过计算其与foreground queries的相关性得到。
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.7\textwidth]{MR1.png}
+\caption{算法步骤}
+\label{fig: MR1}
+\end{figure}
+
+第一阶段与第二阶段中的ranking function是什么呢？
+
+\section{Saliency Optimization from Robust Background Detection}
+
+论文的基本步骤如下：
+
+1. 用SLIC方法将图像先分割成超像素，対一幅$300 \times 400$的图像，取超像素个数为200个足够了。
+
+2. 构造无向图，超像素作为节点，相邻的超像素之间连成边，边的权值用两个超像素区域在CIE-Lab颜色空间上的颜色均值的欧几里得距离$d_{app}(p, q)$表示。
+
+两个超像素之间的deodesic distance被定义为它们在图上最短路径的累计权值和：
+\begin{align}
+d_{geo}(p, q) = \min_{p_1=p, p_2, \ldots, p_n=q}\sum_{i=1}^{n-1}d_{app}(p_i, p_{i+1})
+\end{align}
+
+为方便体现，定义$d_{geo}(p, p) = 0$。每个超像素$p$的spanning area定义为：
+\begin{align}
+Area(p) = \sum_{i=1}^N exp(-\frac{d_{geo}^2(p, p_i)}{2\sigma_{clr}^2})=\sum_{i=1}^N S(p, p_i)
+\end{align}
+
+其中，$N$是超像素的个数。可以看到，$S(p, p_i)$的范围一直在$(0, 1]$之间，并且表征了超像素$p_i$对$p$的贡献大小。当$p_i$和$p$在一个较平坦的区域内，则有$d_{geo}(p, p_i) = 0$，并且$S(p, p_i) =1$，保证$p_i$对区域$p$增加了一个单位区域。而当$p_i$和$p$在不同的区域中时，它们的最短路径中至少有一个边满足$d_{app}(*, *)\ge 3\sigma_{clr})$，使得$S(p, p_i)\approx0$，保证$p_i$不对$p$area没有影响。通过实验发现参数$\sigma_{clr}$在$[5,15]$之间时效果是稳定的，在作者试验中取$\sigma_{clr}=10$。
+
+同样地，将length along the boundary定义为：
+\begin{align}
+Len_{bnd}(p) = \sum_{i=1}^N S(p, p_i) \cdot \delta(p_i \in Bnd)
+\end{align}
+
+最后，计算boundary connectivity
+\begin{align}
+BndCon(p) = \frac{Len_{bnd}(p)}{\sqrt{Area(p)}}
+\end{align}
+
+
 %
 % references
 \bibliographystyle{plain}
