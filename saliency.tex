@@ -331,6 +331,34 @@ foreground cue：foreground presents appearance coherence and consistency
 
 \section{Saliency Optimization from Robust Background Detection}
 
+这个论文是基于假设：an image patch is background only when the region it belongs to is heavily connected to the image boundary.
+
+动机：目前虽然已有方法利用了boundary prior，但一般是基于假设：将图像边缘区域看作是背景。这些方法有两方面的缺点：一是当目标物体稍微接触图像边缘时，效果就会变差。二是它们只是探索性的，并没有告诉我们怎样将其跟其他saliency cues相融合。
+
+这篇论文主要有两个方面的贡献：
+
+1. 提出了一种非常鲁棒的boundary connectivity方法
+
+2. 提出了融合多种low level cues的优化框架
+
+关于boundary connectivity的一个示例：
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.5\textwidth]{wCtr.png}
+\caption{关于boundary connectivity的一个图例}
+\label{fig: wCtr}
+\end{figure}
+
+图~\ref{fig: wCtr}是一幅人造图，共有四个区域。对于人类的视觉感知来说，图中绿色的区域很显然是显著区域，因为它满足以下条件：大、紧凑、仅仅轻微地接触图像边缘。粉色区域与图像边缘接触也很少，但它的size太小了，使得它更像是一个被部分切断了的物体，因而不是显著的。基于此，论文中提出了一种方法来将区域$R$与图像边缘的连接程度量化，叫做boundary connectivity，定义如下：
+\begin{align}
+BndCon(R) = \frac{|\{p|p \in R, p \in Bnd\}|}{\sqrt{|\{p|p \in R\}|}}
+\end{align}，
+其中$Bnd$是处于图像边缘的图像块的集合，$p$是图像块。该公式在几何上的解释是：它是一个区域在边缘上的perimeter与该区域的整个perimeter的比值。这里用的是区域面积的平方根，目的是保持尺度不变性：在不同resolution的图像块上的效果保持稳定。如图~\ref{fig: wCtr}所示，对于背景区域，boundary connectivity值通常较大，而对目标区域，boundary connectivity值通常较小。
+
+有了boundary connectivity的定义，要计算它的值仍然是比较困难的，因为图像分割本身就是一个复杂的问题。用像图~\ref{fig: wCtr}中的hard segmentation不仅会涉及分割方法选择的难题，而且会在区域边界产生不想要的间断性。
+
+论文中指出精确的hard image segmentation是没有必要的，只需要用一种“soft”的分割方法。
+
 论文的基本步骤如下：
 
 1. 用SLIC方法将图像先分割成超像素，対一幅$300 \times 400$的图像，取超像素个数为200个足够了。
@@ -358,6 +386,34 @@ Len_{bnd}(p) = \sum_{i=1}^N S(p, p_i) \cdot \delta(p_i \in Bnd)
 \begin{align}
 BndCon(p) = \frac{Len_{bnd}(p)}{\sqrt{Area(p)}}
 \end{align}
+
+到这里，只是计算出了某区域的boundary connectivity值，还没有求出最终的显著图。以前的显著性方法通常将某区域和周围区域之间的region contrast看成一种saliency cue，计算如下：
+\begin{align}
+Ctr(p) = \sum_{i=1}^{N}d_{app}(p, p_i)w_{spa}(p, p_i)，
+\end{align}
+其中，$d_{app}(p, p_i)$是两个区域在CIELab空间上的颜色均值的欧几里得距离，$w_{spa}(p, p_i)$是区域之间的空间距离，$w_{spa}(p, p_i) = exp(-\frac{d_{spa}^2(p, p_i)}{2\sigma_{spa}^2})$，$d_{spa}(p, p_i)$是超像素$p$和$p_i$的中心间的距离，$\sigma_{spa}$取0.25。
+
+论文中对上述方程进行了扩展，加入了一项新的权重项背景概率$w_i^{bg}$。$w_i^{bg}$是从超像素的boundary connectivity值映射来的。当boundary connectivity值较大时，$w_i^{bg}$接近1，当boundary connectivity值较小时，$w_i^{bg}$接近。定义如下：
+\begin{align}
+w_i^{bg} = 1-exp(-\frac{BndCon^2(p_i)}{2\sigma_{bndCon}^2})，
+\end{align}
+这里令$\sigma_{bndCon}=1$。
+
+于是扩展后的contrast公式如下：
+\begin{align}
+wCtr(p) = \sum_{i=1}^{N}d_{app}(p, p_I)w_{spa}(p, p_i)w_i^{bg}，
+\end{align}
+当$p$是背景区域时，$wCtr(p)$是与其相邻的目标区域的背景关联度的加权，值较小；当$p$是目标区域时，$wCtr(p)$是与其相邻的背景区域的背景关联度的加权，值较大。满足对显著性的定义。
+
+全局优化：定义cost function如下
+\begin{align}
+\sum_{i=1}^{N}w_i^{bg}s_i^2+\sum_{i=1}^{N}s_i^{fg}(s_i-1)^2+\sum_{i, j}w_{ij}(s_i-s_j)^2，
+\end{align}
+其中第一项是背景约束，当某区域的$w_i^{bg}$较大时，是背景的概率较大，方程的第一项占的比重较多，为使整个方程值最小，需使$s_i$近似为0，也就是使该区域的显著性近似为0。第二项是前景约束，当某区域的$w_i^{fg}$较大时，第二项占的比重较大，需使$s_i$近似为1。$w_i^{fg}$可以通过目前已有的一些显著性方法或它们的组合来计算。第三项是平滑约束，保证显著值的连续性，$w_{ij}$定义如下：
+\begin{align}
+w_{ij} = exp(-\frac{d_{app}^2(p_i, p_j)}{2\sigma_{clr}^2})+\mu
+\end{align}
+超像素$p_i$与$p_j$越相似，$d_{app}(p_i, p_j)$越小，$w_{ij} $越大，越需要$s_i$，$s_j$近似相等。
 
 
 %
