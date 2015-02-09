@@ -274,7 +274,7 @@ scale(R) == arg \max_i {R_{t \times t}|R_{t \times t} \subseteq R}
 \begin{align}
 C_i = \sum_{j=1}^{n}w(R_i)\Phi(i, j)||c_i-c_j||_2
 \end{align}
-
+其中$c_i$和$c_j$分别表示区域$R_i$和$R_j$中的颜色，$w(R_j)$指$R_j$中像素的个数。$\Phi(i, j) = exp\{-D(R_i, R_j)/\sigma^2\}$，控制了区域$R_i$和$R_j$之间的空间距离，其中$D(R_i, R_j)$是区域$R_i$和$R_j$的中心的欧几里得距离的平方。
 
 2）location heuristic
 
@@ -282,6 +282,7 @@ C_i = \sum_{j=1}^{n}w(R_i)\Phi(i, j)||c_i-c_j||_2
 \begin{align}
 H_i = \frac{1}{w(R_i)}\sum_{x_i \in R_i} exp\{-\lambda||x_i-x_c||^2\}
 \end{align}
+其中$\{x_0, x_1\ldots\}$是区域$R_i$中的像素坐标的集合，$x_c$是图像中心坐标。
 
 然后将$C_i$与$H_i$组合起来，得到
 \begin{align}
@@ -375,7 +376,7 @@ d_{geo}(p, q) = \min_{p_1=p, p_2, \ldots, p_n=q}\sum_{i=1}^{n-1}d_{app}(p_i, p_{
 Area(p) = \sum_{i=1}^N exp(-\frac{d_{geo}^2(p, p_i)}{2\sigma_{clr}^2})=\sum_{i=1}^N S(p, p_i)
 \end{align}
 
-其中，$N$是超像素的个数。可以看到，$S(p, p_i)$的范围一直在$(0, 1]$之间，并且表征了超像素$p_i$对$p$的贡献大小。当$p_i$和$p$在一个较平坦的区域内，则有$d_{geo}(p, p_i) = 0$，并且$S(p, p_i) =1$，保证$p_i$对区域$p$增加了一个单位区域。而当$p_i$和$p$在不同的区域中时，它们的最短路径中至少有一个边满足$d_{app}(*, *)\ge 3\sigma_{clr})$，使得$S(p, p_i)\approx0$，保证$p_i$不对$p$area没有影响。通过实验发现参数$\sigma_{clr}$在$[5,15]$之间时效果是稳定的，在作者试验中取$\sigma_{clr}=10$。
+其中，$N$是超像素的个数。可以看到，$S(p, p_i)$的范围一直在$(0, 1]$之间，并且表征了超像素$p_i$对$p$的贡献大小。当$p_i$和$p$在一个较平坦的区域内，则有$d_{geo}(p, p_i) = 0$，并且$S(p, p_i) =1$，保证$p_i$对区域$p$增加了一个单位区域。而当$p_i$和$p$在不同的区域中时，它们的最短路径中至少有一个边满足$d_{app}(*, *)\ge 3\sigma_{clr})$，使得$S(p, p_i)\approx0$，保证$p_i$不对$p$的area产生影响。通过实验发现参数$\sigma_{clr}$在$[5,15]$之间时效果是稳定的，在作者试验中取$\sigma_{clr}=10$。
 
 同样地，将length along the boundary定义为：
 \begin{align}
@@ -414,6 +415,56 @@ wCtr(p) = \sum_{i=1}^{N}d_{app}(p, p_I)w_{spa}(p, p_i)w_i^{bg}，
 w_{ij} = exp(-\frac{d_{app}^2(p_i, p_j)}{2\sigma_{clr}^2})+\mu
 \end{align}
 超像素$p_i$与$p_j$越相似，$d_{app}(p_i, p_j)$越小，$w_{ij} $越大，越需要$s_i$，$s_j$近似相等。
+
+\section{Graph-Regularized Saliency Detection With Convex-Hull-Based Center Prior}
+
+简称PBS(the proposed prior based saliency)~\cite{yang2013graph}。
+
+文章动机：Center prior虽然被广泛用到了显著性检测方法中，但是它还有一定的缺陷。比如在很多图像中，显著物体可能会出现在偏离图像中心的位置，这就使得在用center prior时会错误地抑制掉离图像中心很远的目标区域而将靠近图像图像中心的背景区域高亮显示。另外之前的一些方法在计算每个像素点或区域的显著值时是各自独立的，而忽略了相似像素点上显著性值应该近似的现象。基于这两个方面，文章中引入了convex-hull-based center prior和smoothness prior。
+
+算法步骤：
+
+1. 先将给定图像用SLIC方法分割成超像素。
+
+2. 计算初始显著图。先计算了spatially weighted contrast
+\begin{align}
+S_{co}(i) = \sum_{j \ne i}||c_i-c_j|| \cdot exp\left(-\frac{||p_i-p_j||^2}{2\sigma_p^2}\right)
+\end{align}
+然后又计算了convex-hull-based center prior map，即首先估计显著目标的中心位置$(x_0, y_0)$，再计算每个超像素$i$的显著性：
+\begin{align}
+S_{ce}(i) = exp\left(-\frac{||x_i-x_0||^2}{2\sigma_x^2}-\frac{||y_i-y_0||^2}{2\sigma_y^2}\right)
+\end{align}
+最后将两者相乘得到初始显著图
+\begin{align}
+S_{in}(i) = S_{co}(i) \times S_{ce}(i)
+\end{align}
+
+使用convex-hull-based center prior后虽然会改善当显著目标偏离图像中心的情况，但仍然存在以下局限性：1. convex-hull-based center prior的效果取决于所求convex hull的精确度。2. 由于取$\sigma_x$和$\sigma_y$相等并且固定，所以当显著目标不是对称的并且大小是随图像不同而变化的时候，会导致初始显著图的不准确性。
+
+引入smoothness prior可以解决这一问题，得到更精细的显著图。平滑约束通常是用在基于图的目标分割中，目的是使图像中相邻的像素拥有同样的label值。论文中先将图像分割成超像素，然后将其映射为图，每个超像素对应图中的节点，有共同的边界的超像素之间有一条边，边上的权值为$w_{ij} \in W$：
+\begin{align}
+w_{ij} = exp\left(-\frac{||c_i-c_j||}{2\sigma_w^2}\right)，
+\end{align}
+其中$c_i$和$c_j$是CIELab空间超像素区域内像素的颜色均值。可以看到关系矩阵$W$是一个稀疏矩阵。定义如下saliency cost function来表示这种smoothness prior：
+\begin{align}
+E(S) = \sum_i(S(i)-S_{in}(i))^2+\lambda\sum_{i,j}w_{ij}(S(i)-S(j))^2
+\end{align}
+$S(i)$和$S(i)$分别表示节点$i$和$j$的所要求的显著值，$S_{in}(i)$是节点$i$的初始显著值，$\lambda$是规范化系数。其中等式右边第一项是fitting constraint，表示一幅好的显著图与初始显著图之间不会变化太多。第二项是smoothness constraint，一幅好的显著图上相邻超像素的显著值不会相差太多。超像素上的最优显著值是通过最小化该cost function来计算。令该方程关于$S$的导数为0可得
+\begin{align}
+S^* = \mu (D-W+\mu I)^{-1}S_{in}
+\end{align}
+其中$D$是三角矩阵，并且有$d_{ii} = \sum_j (w_{ij})$，$\mu = 1/(2\lambda)$。
+
+
+
+
+
+
+
+
+
+
+
 
 
 %
